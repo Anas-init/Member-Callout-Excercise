@@ -14,7 +14,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.environ["SECRET_KEY"]
+# Dev default so the stack runs with no .env. A real deployment supplies this.
+SECRET_KEY = os.environ.get(
+    "SECRET_KEY", "django-insecure-local-dev-key-only-not-for-any-real-deployment"
+)
 
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 
@@ -74,7 +77,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.environ.get("POSTGRES_DB", "assignment"),
         'USER': os.environ.get("POSTGRES_USER", "test"),
-        'PASSWORD': os.environ["POSTGRES_PASSWORD"],
+        'PASSWORD': os.environ.get("POSTGRES_PASSWORD", "crewlink-local-dev"),
         'HOST': os.environ.get("POSTGRES_HOST", "localhost"),
         'PORT': os.environ.get("POSTGRES_PORT", "5433"),
     }

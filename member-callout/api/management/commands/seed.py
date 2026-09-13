@@ -147,10 +147,8 @@ class Command(BaseCommand):
                     member_id=member_id,
                     delivery_status="delivered",
                     delivered_at=sent_at,
-                    read_at=sent_at + timedelta(minutes=20) if i % 100 < 60 else None,
-                    acknowledged_at=sent_at + timedelta(minutes=25) if i % 100 < 35 else None,
                 )
-                for i, member_id in enumerate(members)
+                for member_id in members
             ],
             ignore_conflicts=True,
             batch_size=500,

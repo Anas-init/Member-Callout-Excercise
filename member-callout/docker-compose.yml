@@ -11,7 +11,9 @@ x-django-env: &django-env
 
 x-django: &django
   build: .
-  env_file: .env
+  env_file:
+    - path: .env
+      required: false
   environment: *django-env
   depends_on:
     migrate:
@@ -23,7 +25,7 @@ services:
     image: postgres:16-alpine
     environment:
       <<: *postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crewlink-local-dev}
     ports:
       - "5433:5432"
     volumes:
@@ -45,7 +47,9 @@ services:
   migrate:
     build: .
     command: sh -c "python manage.py migrate && python manage.py seed"
-    env_file: .env
+    env_file:
+    - path: .env
+      required: false
     environment: *django-env
     depends_on:
       db:
