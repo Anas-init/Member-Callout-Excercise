@@ -73,17 +73,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.environ.get("POSTGRES_DB", "assignment"),
-        'USER': os.environ.get("POSTGRES_USER", "neondb_owner"),
+        'USER': os.environ.get("POSTGRES_USER", "test"),
         'PASSWORD': os.environ["POSTGRES_PASSWORD"],
-        'HOST': os.environ.get(
-            "POSTGRES_HOST",
-            "ep-blue-unit-a177g4f4-pooler.ap-southeast-1.aws.neon.tech",
-        ),
-        'PORT': os.environ.get("POSTGRES_PORT", "5432"),
-        'OPTIONS': {
-            'sslmode': os.environ.get("POSTGRES_SSLMODE", "require"),
-            'prepare_threshold': None,
-        },
+        'HOST': os.environ.get("POSTGRES_HOST", "localhost"),
+        'PORT': os.environ.get("POSTGRES_PORT", "5433"),
     }
 }
 
@@ -119,8 +112,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': ['api.auth.ActiveUserJWTAuthentication'],
-    'DEFAULT_PERMISSION_CLASSES': ['api.permissions.IsActiveLocalUser'],
+    'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework_simplejwt.authentication.JWTAuthentication'],
+    'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 25,
     'UNAUTHENTICATED_USER': None,
@@ -132,15 +125,16 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
+    'CHECK_USER_IS_ACTIVE': True,
 }
 
 CORS_ALLOWED_ORIGINS = ["http://localhost:3000"]
 
 
 
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-AI_MODEL = "claude-haiku-4-5-20251001"
-AI_TIMEOUT_SECONDS = 6
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+AI_MODEL = "gemini-3.1-flash-lite"
+AI_TIMEOUT_SECONDS = 10
 AI_MAX_RETRIES = 1
 PUSH_PREVIEW_MAX_CHARS = 120
 
