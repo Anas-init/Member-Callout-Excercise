@@ -9,123 +9,110 @@ The thinking behind it is in [DESIGN.md](DESIGN.md)
 
 You need Docker Desktop running. Nothing else, no Python and no database setup.
 
+But before doing that you need to add some env variables to get it running smoothly
+
 ```bash
 cd member-callout
+touch .env
+```
+Paste this exact content in .env file that you have created:
+
+I have not added GEMINI_API_KEY which can not be pushed on github due to security scan and google revoke the api itself. So i have send the API_KEY with mail along with submission.
+```bash
+SECRET_KEY=+8_5pdl6)9__!!t99_xkc-2d8vdlu$#%mqru%vpx2hayf(kp8%
+
+POSTGRES_PASSWORD=local-dev
+GEMINI_API_KEY= paste that emailed key here
+```
+
+Then run
+
+```bash
 docker compose up --build
 ```
 
 Give it about a minute. It builds the app, starts a database and two copies of
 the backend behind a load balancer, and fills the database with test data. Once
-you see `nginx ... Started` it's ready at http://localhost:8080.
+you see `nginx ... Started`, open a second terminal for the web app:
 
-To stop it, press `Ctrl+C` and run `docker compose down`. Add `-v` if you also
-want to wipe the data.
+```bash
+cd member-callout/frontend
+npm install
+npm run dev
+```
 
-## Using these commands
+Now open http://localhost:3000.
 
-Everything below is plain curl, so you can use it either way:
+Use `localhost:3000`, not `127.0.0.1:3000`. They look like the same thing but the
+backend only trusts the first one, and the second will be blocked by your
+browser.
 
-* In Postman, click Import, then Raw text, paste the command, and click Continue.
-  You'll get a request you can press Send on.
-* In a terminal. On Windows use Git Bash rather than PowerShell.
+To stop everything, press `Ctrl+C` in both terminals and run `docker compose
+down`. Add `-v` if you also want to wipe the data.
 
-Anywhere you see `PASTE_TOKEN_HERE`, swap in the `access` value you got from
-logging in. Nothing else needs changing. The ids below are real and they don't
-change between restarts.
+## Sign in
 
-## Log in
+Four accounts, all with the password `callout1234`:
 
-There are four accounts and they all use the password `callout1234`:
-
-| Local | Leader | Member |
+| Local | Leader, who sends | Member, who receives |
 |---|---|---|
 | Local 27 (2,000 members) | `denise.okafor@local27.crewlink.test` | `ray.calderon@local27.crewlink.test` |
 | Local 9 (200 members) | `walter.brennan@local9.crewlink.test` | `ray.calderon@local9.crewlink.test` |
 
-```bash
-curl -X POST http://localhost:8080/api/auth/login/ \
-  -H "Content-Type: application/json" \
-  -d '{"email":"denise.okafor@local27.crewlink.test","password":"callout1234"}'
-```
+The same sign-in page serves both. Leaders land on a page for writing and sending
+a callout; members land on their own list of callouts.
 
-Look for `"access": "eyJ..."` in the reply and copy that long string. That's your
-token, and every request below needs it.
+## Try the whole thing
 
-## Send a callout
+Open two browser windows side by side, one signed in as the leader and one as the
+member. Then:
 
-This comes back straight away. The 1,961 messages go out in the background so
-nobody sits waiting at the keyboard.
+1. As the leader, write a title and a message and press Send. It comes back
+   straight away, because the 1,961 messages go out in the background.
+2. Watch the counts. "Sent to their phone" climbs from 0 to 1,961 over a few
+   seconds as they are delivered.
+3. Look at the member window. The callout turns up within about five seconds.
+4. As the member, press "Mark as read", then "I'll be there".
+5. Look back at the leader window. Within a few seconds "Read it" and "Confirmed
+   they are coming" have each gone up by one.
 
-```bash
-curl -X POST http://localhost:8080/api/announcements/ \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer PASTE_LEADER_TOKEN_HERE" \
-  -d '{"idempotency_key":"11111111-1111-4111-8111-111111111111","title":"Safety stand-down Friday","body":"All crews at the hall 7am Friday.","needs_ack":true}'
-```
+Press either member button twice and nothing changes, the original time stays.
+Press Send twice as the leader and only one callout goes out.
 
-You'll get a `201` back along with an `id`. Now press Send a second time. You get
-a `200` and the same announcement, and nothing goes out again. That's the
-double-click protection, and you can watch it work just by clicking twice.
+## Let it write the message for you
 
-Copy the `id`, wait about ten seconds, then check the counts:
-
-```bash
-curl http://localhost:8080/api/announcements/PASTE_ANNOUNCEMENT_ID_HERE/ \
-  -H "Authorization: Bearer PASTE_LEADER_TOKEN_HERE"
-```
-
-```json
-"counts": { "total": 1961, "sent": 1961, "read": 0, "acknowledged": 0 }
-```
-
-## Read it as a member
-
-Log in again, this time as `ray.calderon@local27.crewlink.test`, and open that
-member's inbox:
-
-```bash
-curl http://localhost:8080/api/members/announcements/ \
-  -H "Authorization: Bearer PASTE_MEMBER_TOKEN_HERE"
-```
-
-Copy the `id` of the first message. That's the recipient id, and it goes here:
-
-```bash
-curl -X POST http://localhost:8080/api/members/announcements/PASTE_RECIPIENT_ID_HERE/read/ \
-  -H "Authorization: Bearer PASTE_MEMBER_TOKEN_HERE"
-```
-
-```bash
-curl -X POST http://localhost:8080/api/members/announcements/PASTE_RECIPIENT_ID_HERE/acknowledge/ \
-  -H "Authorization: Bearer PASTE_MEMBER_TOKEN_HERE"
-```
-
-Go back to the leader's counts and they'll read `"read": 1, "acknowledged": 1`.
-If you press either one twice, you get the original timestamp back and nothing
-changes.
-
-## One local can't see another local's data
-
-Log in as the Local 9 leader, then try to open a Local 27 announcement:
-
-```bash
-curl -i http://localhost:8080/api/announcements/5c4922ea-89c4-5696-8cc7-2024b3d83bd2/ \
-  -H "Authorization: Bearer PASTE_LOCAL9_LEADER_TOKEN_HERE"
-```
+Leaders type in a hurry. On the leader's page, choose "Paste a messy note", drop
+in something like:
 
 ```
-HTTP/1.1 404 Not Found
-{"detail":"No Announcement matches the given query."}
+emergency mtg thurs 6pm hall re: contractor pulling crews off the westside job,
+EVERYONE needs to be there this is the third time
 ```
 
-You get a 404 rather than a 403, and that's deliberate. Saying "forbidden" would
-confirm the announcement exists. "Not found" gives an outsider nothing.
+You get back a clear title, a message, and the short version that shows on a
+phone. Nothing has been sent: at that point the callout has zero recipients. You
+can edit any of it, and only "Approve and send" actually sends it. The database
+itself refuses to send wording that nobody approved.
+
+This works with no API key at all, falling back to a plain tidy-up of what you
+typed, and the page tells you which one you got. 
+
+## One local cannot see another local's data
+
+Sign out and sign back in as the Local 9 member,
+`ray.calderon@local9.crewlink.test`.
+
+Then you will see no announcement because announcement was seeded for local 27 on docker startup which ensures rule 1 is enforced.
 
 ## Nobody gets the same callout twice
 
-Pressing Send twice covers the retry case. The harder one is ten people pressing
-Send at the same moment, with the requests landing on different copies of the
-backend. Postman sends one request at a time, so this bit needs a terminal:
+Pressing Send twice in the browser covers the everyday case: the second press
+changes nothing.
+
+The harder case cannot be done from a browser, because a browser can only click
+once at a time. This is ten people pressing Send at the same instant, with the
+requests landing on different copies of the backend. Sign in as a leader to get a
+token from `POST http://localhost:8080/api/auth/login/`, then:
 
 ```bash
 for i in 1 2 3 4 5 6 7 8 9 10; do
@@ -140,83 +127,24 @@ done; wait; echo
 201 200 200 200 200 200 200 200 200 200
 ```
 
-One `201`, so it was created once. Nine `200`s, each of them saying "already
-exists, sending nothing". Wait ten seconds and count what actually went out:
+One `201`, created once. Nine `200`s, each saying "already exists, sending
+nothing". Wait ten seconds and count what actually went out:
 
 ```bash
 docker compose exec db psql -U test -d assignment \
   -c "SELECT count(*) AS messaged, count(DISTINCT recipient_id) AS people FROM api_pushlog;"
 ```
 
-`messaged` and `people` come back equal, so nobody was messaged twice.
-
-The reason this holds is that the database makes the call, not the app. The two
-backend copies never talk to each other, and the copy that says "already exists"
-usually isn't the one that created it.
-
-## Turning a messy note into a clear callout
-
-Leaders type in a hurry. You can send the raw note and the system will write it
-up, but it can't go out until a person approves it.
-
-First, start a draft from the messy note:
-
-```bash
-curl -X POST http://localhost:8080/api/announcements/ \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer PASTE_LEADER_TOKEN_HERE" \
-  -d '{"idempotency_key":"33333333-3333-4333-8333-333333333333","raw_text":"emergency mtg thurs 6pm hall re: contractor pulling crews off the westside job, EVERYONE needs to be there this is the third time"}'
-```
-
-Then write it up, using the `id` you just got back:
-
-```bash
-curl -X POST http://localhost:8080/api/announcements/PASTE_ANNOUNCEMENT_ID_HERE/ai-draft/ \
-  -H "Authorization: Bearer PASTE_LEADER_TOKEN_HERE"
-```
-
-You'll get a clear title, a body, a push preview under 120 characters, and
-`"approved": false`. Nothing has been sent. At this point the message has zero
-recipients.
-
-Approving it is the only thing that sends it:
-
-```bash
-curl -X POST http://localhost:8080/api/announcements/PASTE_ANNOUNCEMENT_ID_HERE/ai-draft/confirm/ \
-  -H "Authorization: Bearer PASTE_LEADER_TOKEN_HERE"
-```
-
-The database itself refuses to send wording that nobody approved, so it isn't
-only the app doing the checking.
-
-All of this works with no API key at all. Without one it falls back to a plain
-tidy-up of whatever was typed. If you want the full version, get a free key from
-[Google AI Studio](https://aistudio.google.com/apikey) and put it in
-`member-callout/.env` as `GEMINI_API_KEY=`. If the provider is slow or down, the
-leader still gets a usable draft instead of an error.
-
-## Making Postman less tedious
-
-Two shortcuts once you've imported a few requests.
-
-To stop pasting tokens, add a collection variable called `token`. On the login
-request, open Scripts, then Post-response, and add:
-
-```javascript
-pm.collectionVariables.set("token", pm.response.json().access);
-```
-
-Now use `Authorization: Bearer {{token}}` everywhere, and logging in keeps it up
-to date on its own.
-
-The `idempotency_key` values above are fixed so you can see the duplicate
-protection working. When you want to send a genuinely new announcement instead,
-put Postman's built-in `{{$guid}}` in that field.
+Those two numbers come back equal, so nobody was messaged twice. It holds because
+the database makes the call, not the app. The two backend copies never talk to
+each other, and the copy that says "already exists" usually isn't the one that
+created it.
 
 ## TEST ACCOUNTS
 
 ```json
 {
+  "web_app": "http://localhost:3000",
   "base_url": "http://localhost:8080",
   "password_for_every_account": "callout1234",
   "locals": {

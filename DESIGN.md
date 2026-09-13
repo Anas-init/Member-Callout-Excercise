@@ -97,6 +97,30 @@ The model is built around one core idea: **union membership is the access bounda
 
 **Constraint:** `UNIQUE (announcement_id, member_id)`  makes it impossible to deliver the same announcement to the same member twice, even on retry or restart.
 
+---
+
+#### `push_logs`
+
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | UUID PK | |
+| `recipient_id` | UUID FK → announcement_recipients.id, UNIQUE | one row per recipient, ever |
+| `sent_at` | TIMESTAMP | |
+| `payload` | JSONB | what was actually pushed: title and push preview |
+
+**Constraint:** `UNIQUE (recipient_id)`.
+
+`announcement_recipients` records that a member is *supposed* to get the message.
+This records that a push *went out*. They are separate because the unique
+constraint here is what makes a second push physically impossible, from any
+instance, any worker, after any restart. Row locking already stops two workers
+claiming the same row; this survives a bug in the claim query too.
+
+It is written in the same transaction as the `pending -> delivered` update, so
+there is never a window where a member has been pushed but the database still
+thinks they are pending.
+
 ### 2. THE SEND PATH
 
 When a leader presses **Send** at 14:02, the API authenticates the leader, verifies their local, creates the announcement, and creates one `announcement_recipients` row for each active member. These rows start as `pending`, with the unique constraint preventing duplicates if the request is retried.
@@ -118,3 +142,50 @@ Also, regarding finding the points of failure in production , we can use structu
 ### 4. A DIAGRAM
 
 ![Architecture Diagram](./diagram.png)
+
+---
+
+## WHAT I CUT
+
+- **WebSockets.** Counts poll every 3s against a Redis cache with a 2s TTL. Every
+  leader watching shares one key, so the DB sees about one count query per
+  announcement per 2s. Pub/sub is still right if it needs to feel instant.
+- **RSVP.** Design only per the brief. Removed the column rather than leave a
+  field nothing writes to.
+- **Real push.** The worker writes a `push_logs` row instead of calling FCM. That
+  table's unique constraint is also what makes a double send impossible.
+- **Tests.** I verified by hand against the running API: four workers racing, a
+  crash mid batch, six concurrent acknowledgements, ten concurrent sends across
+  both instances. It found real bugs but nobody else can re-run it. Biggest gap.
+- **Token refresh.** Login returns a refresh token with no endpoint to redeem it.
+  8 hour sessions. Suspending a member already kills their token on the next
+  request, so this never got urgent.
+- **`delivery_status = "failed"`.** Declared, never set. A push can't fail when
+  sending means writing a row.
+- **Rate limiting.** A leader can send as often as they like.
+- **Logging and monitoring.** Nothing. No `LOGGING` config, no logger calls, no
+  metrics. The only output is `delivered N` from the worker and Django's default
+  request line. Part A above says to keep structured logs of who accessed what
+  and every delivery attempt. None of that is there, so today the answer to "has
+  Rule 1 or Rule 2 already broken in production" is a manual SQL query.
+
+## WHAT I'D DO NEXT
+
+1. **Tests**, starting with the ones I ran by hand: cross local returns 404,
+   member gets 403, suspended token fails, same idempotency key twice creates one
+   announcement, two workers never double deliver. Plus one that walks the URL
+   config and fails if a view has no permission class.
+2. **Move the AI call off the request thread.** 10s timeout plus one retry can
+   hold a gunicorn worker for 20s. Write the draft async, poll for it like the
+   counts already do.
+3. **Real push delivery.** FCM, device token registration, and handling the 5 to
+   10% that fail silently. That's where retries and `failed` start mattering.
+4. **Structured logging, then alerting on it.** JSON lines carrying request id,
+   user id, local id, role and outcome on every request, and one line per
+   delivery batch. That alone makes the two rules queryable. Then alert on the
+   things that should be impossible: a 200 on a cross local request, more than
+   one push for the same recipient, a send with AI text and no `approved_at`.
+   Ship a counter for pending recipients and worker lag at the same time, since
+   a stalled worker currently looks identical to a quiet one.
+5. Refresh endpoint, rate limiting, and a list of past announcements on the
+   leader's screen.
