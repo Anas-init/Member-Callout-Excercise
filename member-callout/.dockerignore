@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+db.sqlite3
+.git/
+
+# secrets reach the container via compose env_file at runtime,
+# they must not be baked into an image layer
+.env
+.gitignore
+staticfiles/
